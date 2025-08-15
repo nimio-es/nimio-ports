@@ -1,0 +1,126 @@
+PortSystem          1.0
+
+name                kickassembler
+version             5.25
+revision            1
+categories          devel lang
+platforms           any
+supported_archs     noarch
+license             restrictive
+maintainers         GitHub: nimio-es
+description         Ensamblador para Commodore 64, empaquetado como JAR con wrapper
+homepage            https://www.theweb.dk/KickAssembler
+livecheck.type      none
+use_configure       no
+universal_variant   no
+
+# -----------------------------
+# Parámetros de descarga
+# -----------------------------
+set project.host    https://www.theweb.dk/KickAssembler
+set project.file    KickAssembler.zip
+set project.url     ${project.host}/${project.file}
+
+distfiles           ${project.file}
+dist_subdir         ${name}
+
+# Requiere Java para ejecutarse
+depends_run         port:openjdk17
+
+# Sustituir por el checksum real
+checksums           sha256 9ef752c12b25f64b55bafecfabf23dfc90a8216b1a293548b2147ed7c15f55a6
+
+# -----------------------------
+# Variables persistentes para artefactos
+# -----------------------------
+options jarfile conffile docfile
+default jarfile  {[lindex [glob -nocomplain -directory ${worksrcpath} *.jar] 0]}
+default conffile {[lindex [glob -nocomplain -directory ${worksrcpath} *.cfg] 0]}
+default docfile  {[lindex [glob -nocomplain -directory ${worksrcpath} *.pdf] 0]}
+
+# -----------------------------
+# Fetch personalizado
+# -----------------------------
+fetch {
+    file mkdir ${distpath}
+    ui_msg "Fetching ${project.url}"
+    system -W ${distpath} "curl -fL -o ${distfiles} ${project.url}"
+}
+
+# -----------------------------
+# Extract personalizado (unzip)
+# -----------------------------
+extract {
+    file delete -force ${worksrcpath}
+    file mkdir ${worksrcpath}
+    system "unzip -q ${distpath}/${distfiles} -d ${worksrcpath}"
+}
+
+# Verificación tras extracción
+post-extract {
+    if {${jarfile} eq ""} {
+        return -code error "No se encontró el JAR en el ZIP"
+    }
+    ui_msg "JAR detectado: [file tail ${jarfile}]"
+    if {${conffile} ne ""} {
+        ui_msg "Archivo de configuración detectado: [file tail ${conffile}]"
+    }
+    if {${docfile} ne ""} {
+        ui_msg "Documentación detectada: [file tail ${docfile}]"
+    }
+}
+
+# -----------------------------
+# Generar wrapper
+# -----------------------------
+build {
+    set jar_install_path ${prefix}/share/${name}/[file tail ${jarfile}]
+    set etcdir           ${prefix}/etc/${name}
+
+    set wrapper ${worksrcpath}/${name}
+    ui_msg "Creando wrapper ${wrapper}"
+
+    set fp [open $wrapper w 0644]
+    puts $fp "#!/bin/sh"
+    puts $fp "JAR=\"${jar_install_path}\""
+    puts $fp "ETCDIR=\"${etcdir}\""
+    puts $fp "JAVA_BIN=\"\$(command -v java 2>/dev/null)\""
+
+    # Comprobación previa
+    puts $fp {if [ -z "$JAVA_BIN" ]; then}
+    puts $fp "  echo \"Error: no se encontró Java en el PATH\" >&2"
+    puts $fp "  exit 1"
+    puts $fp "fi"
+    
+    puts $fp "CONF_FILE=\"\$ETCDIR/${name}.conf\""
+    puts $fp {if [ -f "$CONF_FILE" ]; then . "$CONF_FILE"; fi}
+
+    puts $fp "exec \"\$JAVA_BIN\" \${JAVA_OPTS:-} -jar \"\$JAR\" \${APP_OPTS:-} \"\$@\""
+    close $fp
+    file attributes $wrapper -permissions 0755
+
+    ui_msg "Wrapper generado para ejecutar KickAssembler"
+}
+
+destroot {
+    xinstall -m 0755 -d ${destroot}${prefix}/bin
+    xinstall -m 0755 -d ${destroot}${prefix}/share/${name}
+    xinstall -m 0755 -d ${destroot}${prefix}/etc/${name}
+    xinstall -m 0755 -d ${destroot}${prefix}/share/doc/${name}
+
+    # JAR
+    xinstall -m 0644 ${jarfile} ${destroot}${prefix}/share/${name}/
+
+    # Config
+    if {${conffile} ne ""} {
+        xinstall -m 0644 ${conffile} ${destroot}${prefix}/etc/${name}/${name}.conf
+    }
+
+    # Documentación
+    if {${docfile} ne ""} {
+        xinstall -m 0644 ${docfile} ${destroot}${prefix}/share/doc/${name}/
+    }
+
+    # Wrapper
+    xinstall -m 0755 ${worksrcpath}/${name} ${destroot}${prefix}/bin/${name}
+}

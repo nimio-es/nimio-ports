@@ -1,0 +1,52 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+# Z88DK
+
+PortSystem          1.0
+PortGroup           github 1.0
+
+name                z88dk
+version             2.3
+revision            1
+categories          devel
+platforms           darwin
+license             BSD
+maintainers         your@email.example.com
+description         Z80 cross-development kit
+long_description    Z88DK is a multi-target Z80 cross-development kit including \
+                    compilers (sccz80 and zsdcc), assembler, libraries and tools.
+
+# Fetch from GitHub with full submodules
+github.setup        z88dk z88dk ${version} v
+fetch.type          git
+
+# Build requirements
+use_configure       no
+depends_build       port:gmake port:cmake port:bison port:flex
+
+# Initialize all submodules recursively
+post-extract {
+    system -W ${worksrcpath} "${git.cmd} submodule update --init --recursive"
+}
+
+# Use the official build script to compile everything
+build.cmd           ./build.sh
+build.pre_args      {}
+build.args          {}
+
+# Manual installation of compiled artifacts
+destroot {
+set bindir ${destroot}${prefix}/bin
+    xinstall -d $bindir
+    xinstall -m 0755 {*}[glob -nocomplain ${worksrcpath}/bin/*] $bindir
+}
+
+test.run    yes
+test.cmd    ${prefix}/bin/zcc
+test.args   {-h}
+test.env    ZCCCFG=${prefix}/share/z88dk/lib/config
+
+# Variant to build from master branch instead of stable release
+variant devel description {Build latest development version from GitHub master branch} {
+    version       "devel-[clock format [clock seconds] -format {%Y%m%d}]"
+}

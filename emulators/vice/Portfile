@@ -1,0 +1,39 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           github 1.0
+
+name                vice
+version             3.9.0
+revision            0
+categories          emulators
+license             GPL-2+
+maintainers         GitHub: nimio-es
+description         Versatile Commodore Emulator (VICE)
+long_description    VICE es un conjunto de emuladores de ordenadores Commodore de 8 bits.
+worksrcdir          vice-${version}
+
+build.dir           ${worksrcpath}/vice
+
+# Configuración de GitHub
+github.setup        VICE-Team svn-mirror ${version}
+
+# Fetch
+fetch.type          git
+
+# Dependencias de compilación básicas (ajustar luego según configure.log)
+depends_build       port:pkgconfig
+depends_lib         port:libsdl2 port:libsdl2_image
+
+# Evitamos build/destroot de momento para probar fetch+configure
+use_autoreconf      yes
+configure.args      --prefix=${prefix} \
+                    --disable-sdlui2 # ejemplo de flag opcional
+
+# Saltar fases de build y destroot por ahora
+build {}
+destroot {}
+
+notes "
+La construcción de VICE se basa en usar el mirror que mantiene el propio equipo en GitHub.
+"

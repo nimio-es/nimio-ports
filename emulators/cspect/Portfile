@@ -1,0 +1,146 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+
+name                cspect
+version             3.0.2.1
+revision            0
+categories          emulators
+platforms           any
+supported_archs     noarch
+license             restrictive
+maintainers         GitHub: nimio-es
+description         CSpect ZX Spectrum emulator (instalación local desde ZIP)
+long_description    CSpect es un emulador privativo de ZX Spectrum. Este port requiere que el usuario provea el ZIP localmente.
+homepage            https://mdf200.itch.io/cspect
+livecheck.type      none
+use_configure       no
+universal_variant   no
+
+# Requiere mono para ejecutar CSpect.exe
+depends_run         path:bin/mono:mono
+
+# -----------------------------
+# Parámetros configurables
+# -----------------------------
+options             distfile_name local_zip downloads_dir
+default distfile_name {CSpect.zip}
+# Permite pasar una ruta absoluta al ZIP si no está en Downloads
+default local_zip       {}
+# Deducción de la carpeta Downloads del usuario que invoca (vía sudo o no)
+default downloads_dir {
+    set u ""
+    if {[info exists ::env(SUDO_USER)] && $::env(SUDO_USER) ne ""} {
+        set u $::env(SUDO_USER)
+    } elseif {[info exists ::env(USER)] && $::env(USER) ne ""} {
+        set u $::env(USER)
+    }
+    if {$u eq ""} {
+        # Fallback poco probable; dejará un mensaje de error en fetch
+        return "/Users/Shared/Downloads"
+    }
+    return "/Users/${u}/Downloads"
+}
+
+# Distfile "ficticio": lo tomaremos del sistema de archivos local
+distfiles           ${distfile_name}
+dist_subdir         ${name}
+checksums           none
+
+# -----------------------------
+# Fetch: copia desde Downloads o ruta indicada
+# -----------------------------
+fetch {
+    file mkdir ${distpath}
+
+    set source ""
+    if {${local_zip} ne "" && [file exists ${local_zip}]} {
+        set source ${local_zip}
+    } else {
+        set candidate [file join ${downloads_dir} ${distfile_name}]
+        if {[file exists $candidate]} {
+            set source $candidate
+        }
+    }
+
+    if {$source eq ""} {
+        ui_error "No se encontró '${distfile_name}' en ${downloads_dir}."
+        ui_error "CSpect es software privativo y no se descarga automáticamente."
+        ui_error "Por favor, descarga el ZIP manualmente y colócalo en ${downloads_dir},"
+        ui_error "o invoca el port con 'local_zip=/ruta/al/archivo.zip'."
+        return -code error "ZIP de CSpect ausente"
+    }
+
+    ui_msg "Usando ZIP local: $source"
+    file copy -force $source ${distpath}/${distfiles}
+}
+
+# -----------------------------
+# Extract: unzip al worksrcpath y aplanar si hay una carpeta raíz única
+# -----------------------------
+extract {
+    file delete -force ${worksrcpath}
+    file mkdir ${worksrcpath}
+    system "unzip -q ${distpath}/${distfiles} -d ${worksrcpath}"
+
+    # Si el ZIP crea una única carpeta raíz, mover su contenido a worksrcpath
+    set entries [glob -nocomplain -directory ${worksrcpath} *]
+    if {[llength $entries] == 1 && [file isdirectory [lindex $entries 0]]} {
+        set sub [lindex $entries 0]
+        foreach e [glob -nocomplain -directory $sub -types {f d} .* *] {
+            set base [file tail $e]
+            if {$base in {. ..}} { continue }
+            file rename -force $e ${worksrcpath}/$base
+        }
+        file delete -force $sub
+    }
+}
+
+# -----------------------------
+# Build: no hay compilación; se generará el wrapper en destroot
+# -----------------------------
+build {}
+
+# -----------------------------
+# Destroot: instalar árbol completo y crear wrapper
+# -----------------------------
+destroot {
+    # Instalar todo el contenido extraído bajo libexec
+    set appdir ${destroot}${prefix}/libexec/${name}
+    xinstall -d $appdir
+
+    # Copiar todo el árbol (archivos y subdirectorios)
+    foreach item [glob -nocomplain -directory ${worksrcpath} .* *] {
+        set base [file tail $item]
+        if {$base in {. ..}} { continue }
+        if {[file isdirectory $item]} {
+            file copy -force $item $appdir/
+        } else {
+            xinstall -m 0644 $item ${appdir}/$base
+        }
+    }
+
+    # Crear wrapper en bin
+    set bindir ${destroot}${prefix}/bin
+    xinstall -d $bindir
+    set wrapper ${bindir}/${name}
+    set fp [open $wrapper w 0644]
+    puts $fp "#!/bin/sh"
+    puts $fp "APPDIR=\"${prefix}/libexec/${name}\""
+    puts $fp "EXE=\"\$APPDIR/CSpect.exe\""
+    puts $fp "MONO_BIN=\"\$(command -v mono 2>/dev/null)\""
+    puts $fp "if [ -z \"\$MONO_BIN\" ]; then"
+    puts $fp "  echo \"Error: no se encontró 'mono' en el PATH. Instala el port 'mono'.\" >&2"
+    puts $fp "  exit 1"
+    puts $fp "fi"
+    puts $fp "exec \"\$MONO_BIN\" \"\$EXE\" \"\$@\""
+    close $fp
+    file attributes $wrapper -permissions 0755
+}
+
+notes "
+CSpect es software privativo. Este port no descarga el ZIP.
+Coloca ${distfile_name} en ~/Downloads (o pasa local_zip=/ruta/al/zip) y ejecuta:
+  sudo port install ${name}
+El binario 'cspect' invoca 'mono' con CSpect.exe. Asegúrate de tener 'mono' instalado.
+"

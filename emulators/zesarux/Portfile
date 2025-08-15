@@ -1,0 +1,92 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           github 1.0
+
+name                zesarux
+version             12.0
+categories          emulators
+platforms           darwin
+license             GPL-3+
+maintainers         GitHub: nimio-es
+description         ZX Second-Emulator And Released for UniX
+long_description    ZEsarUX emula multitud de ordenadores Sinclair y clones, \
+                    con herramientas de depuración avanzadas y soporte de periféricos.
+
+# Fuente oficial con prefijo de tags ZEsarUX-
+github.setup        chernandezba zesarux ${version} ZEsarUX-
+fetch.type          git
+
+# Dependencias base: SDL2 y CLI por defecto
+depends_lib         port:libsdl2 port:libsdl2_image port:libpng port:libxml2 port:libiconv
+depends_build       port:automake
+
+# Detecta la versión actual de macOS en el formato mayor.menor
+set full_ver  [exec sw_vers -productVersion]
+set parts     [split $full_ver .]
+set deployment_target [join [lrange $parts 0 1] .]
+
+# Configuración
+configure.dir       ${worksrcpath}/src
+configure.env       CFLAGS=-O3 -mmacosx-version-min=${deployment_target} \
+                    LDFLAGS=-O3 -mmacosx-version-min=${deployment_target} \
+                    OBJCFLAGS=-mmacosx-version-min=${deployment_target}
+
+configure.args      --enable-ssl \
+                    --disable-xwindows \
+                    --disable-sdl \
+                    --disable-fbdev \
+                    --disable-caca \
+                    --disable-aa \
+                    --disable-curses \
+                    --disable-sndfile
+
+# Building
+build.dir           ${worksrcpath}/src
+build.cmd           make
+build.target        clean all
+
+destroot {
+    # Binario principal
+    xinstall -d ${destroot}${prefix}/bin
+    xinstall -m 0755 ${worksrcpath}/src/zesarux ${destroot}${prefix}/bin
+
+    # Crea la carpeta de destino en ${prefix}/share/<paquete>
+    set romdir ${destroot}${prefix}/share/${name}
+    xinstall -d ${romdir}
+
+    # Copia las ROMs de src
+    foreach romfile [glob -nocomplain ${worksrcpath}/src/*.rom] {
+        xinstall -m 644 ${romfile} ${romdir}
+    }
+
+    # Copia las ROMs alternativas
+    set altromdir ${romdir}/alternate_roms
+    xinstall -d ${altromdir}
+    foreach romfile [glob -nocomplain ${worksrcpath}/src/alternate_roms/*.rom] {
+        xinstall -m 644 ${romfile} ${altromdir}
+    }
+
+    # Changelog
+    xinstall -m 644 ${worksrcpath}/src/Cambios ${romdir}
+    xinstall -m 644 ${worksrcpath}/src/Changelog ${romdir}
+
+    # TBBlue MMCS
+    xinstall -m 666 ${worksrcpath}/src/tbblue.mmc ${romdir}
+
+    # ZX-Uno flash
+    xinstall -m 644 ${worksrcpath}/src/zxuno.flash ${romdir}
+}
+
+# Test mínimo
+test.run    yes
+test.cmd    ${prefix}/bin/zesarux
+test.args   {--help}
+
+# --- Variantes ---
+
+# Última versión de desarrollo
+variant devel description {Build latest development version from GitHub master branch} {
+    git.branch    master
+    version       "devel-[clock format [clock seconds] -format {%Y%m%d}]"
+}

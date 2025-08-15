@@ -1,0 +1,42 @@
+# devel/dasm/Portfile
+PortSystem          1.0
+PortGroup           github 1.0
+
+name                dasm
+version             2.20.14
+categories          devel
+license             GPL-2
+platforms           darwin
+maintainers         GitHub: nimio-es
+description         Cross-assembler for 6502 and others
+long_description    Classic multi-CPU cross-assembler (6502/6507/6800/6809), \
+                    widely used in Atari 2600 development and other targets.
+
+# Official GitHub repository for DASM
+github.setup        dasm dasm ${version} v
+distname            ${name}-${version}
+
+# No configure script is needed
+use_configure       no
+
+# Standard build with Makefile
+build.cmd           make
+build.target        all
+
+destroot {
+    # Install main binary
+    xinstall -m 755 ${worksrcpath}/bin/dasm ${destroot}${prefix}/bin/dasm
+
+    # Install documentation (if present)
+    xinstall -d ${destroot}${prefix}/share/doc/${name}
+    foreach f {README.md CHANGES.md LICENSE} {
+        if {[file exists ${worksrcpath}/$f]} {
+            xinstall -m 644 ${worksrcpath}/$f ${destroot}${prefix}/share/doc/${name}/
+        }
+    }
+}
+
+# Optional: Basic test phase to validate installation
+test.run    yes
+test.cmd    ${destroot}${prefix}/bin/dasm
+test.args   {-v}
