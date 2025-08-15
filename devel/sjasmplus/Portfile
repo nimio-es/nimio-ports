@@ -1,0 +1,25 @@
+PortSystem          1.0
+PortGroup           github 1.0
+
+github.setup        z00m128 sjasmplus v1.21.0
+version             1.21.0
+categories          devel
+platforms           darwin
+maintainers         nimio-es
+license             BSD
+description         Modern Z80 cross-assembler with powerful macro support
+long_description    SjasmPlus is a Z80 assembler with modern features, \
+                    designed for cross-development and retro computing.
+
+fetch.type          git
+
+post-fetch {
+    system -W ${worksrcpath} "git submodule update --init --recursive"
+}
+
+use_configure       no
+build.cmd           make
+
+destroot {
+    xinstall -m 755 ${worksrcpath}/sjasmplus ${destroot}${prefix}/bin/sjasmplus
+}
